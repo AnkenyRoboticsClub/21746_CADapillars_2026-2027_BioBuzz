@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-@TeleOp(name="Monarch v1", group="Monarch")
+@TeleOp(name="Monarch v1.0.3", group="Monarch")
 public class Monarch extends OpMode {
     // Declare OpMode members.
     private ElapsedTime runtime = new ElapsedTime();
