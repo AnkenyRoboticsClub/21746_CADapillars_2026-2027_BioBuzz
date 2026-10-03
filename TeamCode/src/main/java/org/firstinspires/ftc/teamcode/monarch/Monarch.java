@@ -80,10 +80,10 @@ public class Monarch extends OpMode {
         double rightStickYProcessed = -1 * rightStickYRaw;
         telemetry.addData("Forward Speed (Processed)", rightStickYProcessed);
 
-        frontLeft.setPower(rightStickYRaw);
-        frontRight.setPower(rightStickYRaw);
-        backLeft.setPower(rightStickYRaw);
-        backRight.setPower(rightStickYRaw);
+        frontLeft.setPower(rightStickYProcessed);
+        frontRight.setPower(rightStickYProcessed);
+        backLeft.setPower(rightStickYProcessed);
+        backRight.setPower(rightStickYProcessed);
 
     }
 
