@@ -16,14 +16,20 @@ public class Monarch extends OpMode {
     private DcMotor backRight = null;
     private DcMotor intake = null;
     private DcMotor midtake = null;
-    //private DcMotor launch = null;
+    private DcMotor launch = null;
 
     double speed_modifier = 1.0; // scale the speed
     ElapsedTime SpeedInputCD = new ElapsedTime();
     ElapsedTime LaunchInputCD = new ElapsedTime();
     ElapsedTime LaunchTimer = new ElapsedTime();
 
-    private double launchPower = .5;
+    private double launchPower = .25;
+    private double intakePower = 0.5;
+
+    private double drivePower = 0.5;
+
+
+    private long nextUpdate;
 
     /*
      * Code to run ONCE when the driver hits INIT
@@ -32,6 +38,8 @@ public class Monarch extends OpMode {
     public void init() {
         telemetry.addData("Status", "Initializing");
 
+        nextUpdate = System.currentTimeMillis();
+
         // Initialize all  motors
         backLeft = hardwareMap.get(DcMotor.class, "motorBackLeft");
         frontRight = hardwareMap.get(DcMotor.class, "motorFrontRight");
@@ -39,7 +47,7 @@ public class Monarch extends OpMode {
         backRight = hardwareMap.get(DcMotor.class, "motorBackRight");
         intake = hardwareMap.get(DcMotor.class, "intake");
         midtake = hardwareMap.get(DcMotor.class, "midtake");
-        //launch = hardwareMap.get(DcMotor.class, "launch");
+        launch = hardwareMap.get(DcMotor.class, "launch");
 
         backRight.setDirection(DcMotorSimple.Direction.REVERSE);
         frontRight.setDirection(DcMotorSimple.Direction.FORWARD);
@@ -52,7 +60,7 @@ public class Monarch extends OpMode {
         backRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         frontLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         frontRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        //launch.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        launch.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         // Tell the driver that initialization is complete.
         telemetry.addData("Status", "Initialized");
@@ -80,17 +88,71 @@ public class Monarch extends OpMode {
     public void loop() {
         telemetry.addData("Version", "1.1.0");
 
-        drive();
-        jankLaunch();
+        testDrive();
+        testIntake();
+        testLaunch();
         telemetry.update();
     }
 
-    private void jankLaunch() { // please replace with pid system later
-        if (gamepad1.a && LaunchInputCD.seconds() > .35) {
+    private void changeDriveSpeed (){
+
+        if (gamepad1.left_trigger_pressed)
+        {
+            if (System.currentTimeMillis() > nextUpdate)
+            {
+                drivePower = drivePower -0.5;
+                nextUpdate = System.currentTimeMillis() + 1000;
+            }
+        }
+        else if (gamepad1.right_trigger_pressed)
+        {
+            if (System.currentTimeMillis() > nextUpdate)
+            {
+                drivePower = drivePower + 0.5;
+                nextUpdate = System.currentTimeMillis() + 1000;
+            }
+        }
+
+    }
+
+    private void testIntake() {
+
+        if (gamepad1.left_bumper)
+        {
+            if (System.currentTimeMillis() > nextUpdate)
+            {
+                intakePower = intakePower - 0.1;
+                nextUpdate = System.currentTimeMillis() + 1000; // One second delay before you can update again
+            }
+        }
+        else if (gamepad1.right_bumper)
+        {
+            if (System.currentTimeMillis() > nextUpdate)
+            {
+                intakePower = intakePower + 0.1;
+                nextUpdate = System.currentTimeMillis() + 1000; // One second delay before you can update again
+            }
+        }
+
+        if (gamepad1.a)
+        {
+            intake.setPower(intakePower);
+        }
+        else
+        {
+            intake.setPower(0);
+        }
+
+        telemetry.addData("Intake Power", intakePower);
+
+    }
+
+    private void testLaunch() { // please replace with pid system later
+        if (gamepad1.y && LaunchInputCD.milliseconds() > 350) {
             launchPower += .1;
 
             LaunchInputCD.reset();
-        } else if (gamepad1.b && LaunchInputCD.seconds() > .35) {
+        } else if (gamepad1.b && LaunchInputCD.milliseconds() > 350) {
             launchPower -= .1;
 
             LaunchInputCD.reset();
@@ -107,12 +169,33 @@ public class Monarch extends OpMode {
             //launch.setPower(launchPower);
 
             // } else if (launch.getPower()>.05){
-            //   if (LaunchTimer.seconds()>.3){
+            //   if (LaunchTimer.milliseconds()>300{
             //     launch.setPower(0.0);
             //}
             //}
 
         }
+    }
+
+    private void testDrive() {
+        double forward = gamepad1.left_stick_y * -1;
+        double right = gamepad1.left_stick_x;
+        double rotate = gamepad1.right_stick_x;
+
+        double frontLeftPower = forward + right + rotate;
+        double frontRightPower = forward - right - rotate;
+        double backRightPower = forward + right - rotate;
+        double backLeftPower = forward - right + rotate;
+
+        double maxSpeed = 1.0;  // make this slower for outreaches
+
+        // We multiply by maxSpeed so that it can be set lower for outreaches
+        // When a young child is driving the robot, we may not want to allow full
+        // speed.
+        frontLeft.setPower(maxSpeed * frontLeftPower);
+        frontRight.setPower(maxSpeed * frontRightPower);
+        backLeft.setPower(maxSpeed * backLeftPower);
+        backRight.setPower(maxSpeed * backRightPower);
     }
 
 
@@ -130,12 +213,12 @@ public class Monarch extends OpMode {
         double backLeftPower   = axial - lateral + yaw;
         double backRightPower  = axial + lateral - yaw;
 
-        if (gamepad1.left_bumper&& SpeedInputCD.seconds()>.35){
+        if (gamepad1.left_bumper&& SpeedInputCD.milliseconds()>350){
             speed_modifier-=.1;
             speed_modifier = Math.max(.1,speed_modifier);
 
             SpeedInputCD.reset();
-        } else if (gamepad1.right_bumper&& SpeedInputCD.seconds()>.35){
+        } else if (gamepad1.right_bumper&& SpeedInputCD.milliseconds()>350){
             speed_modifier+=.1;
             speed_modifier = Math.min(1.0,speed_modifier);
 
@@ -171,6 +254,8 @@ public class Monarch extends OpMode {
         telemetry.addData("Intake Power", intake.getPower());
         telemetry.addData("Mid-take Power", midtake.getPower());
     }
+
+
     /*
      * Code to run ONCE after the driver hits STOP
      */

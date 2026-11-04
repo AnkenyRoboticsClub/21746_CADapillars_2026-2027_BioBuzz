@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 @Autonomous(name="busted auto",group="Monarch")
-public class test_auto extends LinearOpMode {
+public class monarch_auto extends LinearOpMode {
 
 
     private DcMotor backLeft = null;
