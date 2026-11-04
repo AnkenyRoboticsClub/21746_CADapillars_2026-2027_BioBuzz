@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-@TeleOp(name="Monarch v1.0.3", group="Monarch")
+@TeleOp(name="Monarch v1.1.0", group="Monarch")
 public class Monarch extends OpMode {
     // Declare OpMode members.
     private ElapsedTime runtime = new ElapsedTime();
@@ -14,6 +14,22 @@ public class Monarch extends OpMode {
     private DcMotor frontRight = null;
     private DcMotor frontLeft = null;
     private DcMotor backRight = null;
+    private DcMotor intake = null;
+    private DcMotor midtake = null;
+    private DcMotor launch = null;
+
+    double speed_modifier = 1.0; // scale the speed
+    ElapsedTime SpeedInputCD = new ElapsedTime();
+    ElapsedTime LaunchInputCD = new ElapsedTime();
+    ElapsedTime LaunchTimer = new ElapsedTime();
+
+    private double launchPower = .25;
+    private double intakePower = 0.5;
+
+    private double drivePower = 0.5;
+
+
+    private long nextUpdate;
 
     /*
      * Code to run ONCE when the driver hits INIT
@@ -22,13 +38,29 @@ public class Monarch extends OpMode {
     public void init() {
         telemetry.addData("Status", "Initializing");
 
-        // Initialize all 4 motors
-        backLeft = hardwareMap.get(DcMotor.class, "motorFrontLeft");
+        nextUpdate = System.currentTimeMillis();
+
+        // Initialize all  motors
+        backLeft = hardwareMap.get(DcMotor.class, "motorBackLeft");
         frontRight = hardwareMap.get(DcMotor.class, "motorFrontRight");
-        frontLeft = hardwareMap.get(DcMotor.class, "motorBackLeft");
+        frontLeft = hardwareMap.get(DcMotor.class, "motorFrontLeft");
         backRight = hardwareMap.get(DcMotor.class, "motorBackRight");
-        backRight.setDirection(DcMotorSimple.Direction.FORWARD);
-        backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
+        intake = hardwareMap.get(DcMotor.class, "intake");
+        midtake = hardwareMap.get(DcMotor.class, "midtake");
+        launch = hardwareMap.get(DcMotor.class, "launch");
+
+        backRight.setDirection(DcMotorSimple.Direction.REVERSE);
+        frontRight.setDirection(DcMotorSimple.Direction.FORWARD);
+        backLeft.setDirection(DcMotorSimple.Direction.FORWARD);
+        frontLeft.setDirection(DcMotorSimple.Direction.REVERSE);
+        intake.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        // I actually believe these are defaults; but it makes code easier to understand
+        backLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        backRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        launch.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         // Tell the driver that initialization is complete.
         telemetry.addData("Status", "Initialized");
@@ -54,38 +86,175 @@ public class Monarch extends OpMode {
      */
     @Override
     public void loop() {
-        telemetry.addData("Version", "1.0.3");
+        telemetry.addData("Version", "1.1.0");
 
-        driveForwardAndBackwardOnly();
-
-        if (gamepad1.y)
-            frontRight.setPower(0.5); // Front Right
-
-        if (gamepad1.b)
-            backLeft.setPower(0.5); // Back Left
-
-        if (gamepad1.a)
-            backRight.setPower(0.5); // Back right
-
-        if (gamepad1.x)
-            frontLeft.setPower(0.5); // Front Left
-
+        testDrive();
+        testIntake();
+        testLaunch();
         telemetry.update();
     }
 
-    private void driveForwardAndBackwardOnly() {
-        double rightStickYRaw = gamepad1.right_stick_y;
-        telemetry.addData("Forward Speed (Raw)", rightStickYRaw);
+    private void changeDriveSpeed (){
 
-        double rightStickYProcessed = -1 * rightStickYRaw;
-        telemetry.addData("Forward Speed (Processed)", rightStickYProcessed);
-
-        frontLeft.setPower(rightStickYProcessed);
-        frontRight.setPower(rightStickYProcessed);
-        backLeft.setPower(rightStickYProcessed);
-        backRight.setPower(rightStickYProcessed);
+        if (gamepad1.left_trigger_pressed)
+        {
+            if (System.currentTimeMillis() > nextUpdate)
+            {
+                drivePower = drivePower -0.5;
+                nextUpdate = System.currentTimeMillis() + 1000;
+            }
+        }
+        else if (gamepad1.right_trigger_pressed)
+        {
+            if (System.currentTimeMillis() > nextUpdate)
+            {
+                drivePower = drivePower + 0.5;
+                nextUpdate = System.currentTimeMillis() + 1000;
+            }
+        }
 
     }
+
+    private void testIntake() {
+
+        if (gamepad1.left_bumper)
+        {
+            if (System.currentTimeMillis() > nextUpdate)
+            {
+                intakePower = intakePower - 0.1;
+                nextUpdate = System.currentTimeMillis() + 1000; // One second delay before you can update again
+            }
+        }
+        else if (gamepad1.right_bumper)
+        {
+            if (System.currentTimeMillis() > nextUpdate)
+            {
+                intakePower = intakePower + 0.1;
+                nextUpdate = System.currentTimeMillis() + 1000; // One second delay before you can update again
+            }
+        }
+
+        if (gamepad1.a)
+        {
+            intake.setPower(intakePower);
+        }
+        else
+        {
+            intake.setPower(0);
+        }
+
+        telemetry.addData("Intake Power", intakePower);
+
+    }
+
+    private void testLaunch() { // please replace with pid system later
+        if (gamepad1.y && LaunchInputCD.milliseconds() > 350) {
+            launchPower += .1;
+
+            LaunchInputCD.reset();
+        } else if (gamepad1.b && LaunchInputCD.milliseconds() > 350) {
+            launchPower -= .1;
+
+            LaunchInputCD.reset();
+        }
+
+        telemetry.addData("launchPower", launchPower);
+
+        //we keep the launch power in check
+        launchPower = Math.max(0.0, (Math.min(1.0, launchPower)));
+
+        if (gamepad1.y) {
+            LaunchTimer.reset();
+
+            //launch.setPower(launchPower);
+
+            // } else if (launch.getPower()>.05){
+            //   if (LaunchTimer.milliseconds()>300{
+            //     launch.setPower(0.0);
+            //}
+            //}
+
+        }
+    }
+
+    private void testDrive() {
+        double forward = gamepad1.left_stick_y * -1;
+        double right = gamepad1.left_stick_x;
+        double rotate = gamepad1.right_stick_x;
+
+        double frontLeftPower = forward + right + rotate;
+        double frontRightPower = forward - right - rotate;
+        double backRightPower = forward + right - rotate;
+        double backLeftPower = forward - right + rotate;
+
+        double maxSpeed = 1.0;  // make this slower for outreaches
+
+        // We multiply by maxSpeed so that it can be set lower for outreaches
+        // When a young child is driving the robot, we may not want to allow full
+        // speed.
+        frontLeft.setPower(maxSpeed * frontLeftPower);
+        frontRight.setPower(maxSpeed * frontRightPower);
+        backLeft.setPower(maxSpeed * backLeftPower);
+        backRight.setPower(maxSpeed * backRightPower);
+    }
+
+
+// drive Mecanum robot centric
+    private void drive() {
+
+
+        // input for speed and driving control
+        double axial   = -gamepad1.left_stick_y;
+        double lateral =  gamepad1.left_stick_x;
+        double yaw     =  gamepad1.right_stick_x;
+
+        double frontLeftPower  = axial + lateral + yaw;
+        double frontRightPower = axial - lateral - yaw;
+        double backLeftPower   = axial - lateral + yaw;
+        double backRightPower  = axial + lateral - yaw;
+
+        if (gamepad1.left_bumper&& SpeedInputCD.milliseconds()>350){
+            speed_modifier-=.1;
+            speed_modifier = Math.max(.1,speed_modifier);
+
+            SpeedInputCD.reset();
+        } else if (gamepad1.right_bumper&& SpeedInputCD.milliseconds()>350){
+            speed_modifier+=.1;
+            speed_modifier = Math.min(1.0,speed_modifier);
+
+            SpeedInputCD.reset();
+        }
+
+        //Modify and keep power under 1.0
+        double max;
+        max = Math.max(Math.abs(frontLeftPower), Math.abs(frontRightPower));
+        max = Math.max(max, Math.abs(backLeftPower));
+        max = Math.max(max, Math.abs(backRightPower));
+
+        //much better and simpler way to cap
+        double denominator = Math.max(1.0,max);
+
+        double calcFrontLeftPower = (frontLeftPower/denominator)*speed_modifier;
+        double calcFrontRightPower = (frontRightPower/denominator)*speed_modifier;
+        double calcBackLeftPower = (backLeftPower/denominator)*speed_modifier;
+        double calcBackRightPower = (backRightPower/denominator)*speed_modifier;
+
+        // Send calculated power to wheels
+        frontLeft.setPower(calcFrontLeftPower);
+        frontRight.setPower(calcFrontRightPower);
+        backLeft.setPower(calcBackLeftPower);
+        backRight.setPower(calcBackRightPower);
+
+        intake.setPower(gamepad1.left_trigger);
+        midtake.setPower(gamepad1.right_trigger);
+
+        telemetry.addData("Speed-Cap", speed_modifier);
+        telemetry.addData("Front left/Right", "%4.2f, %4.2f", calcFrontLeftPower, calcFrontRightPower);
+        telemetry.addData("Back  left/Right", "%4.2f, %4.2f", calcBackLeftPower, calcBackRightPower);
+        telemetry.addData("Intake Power", intake.getPower());
+        telemetry.addData("Mid-take Power", midtake.getPower());
+    }
+
 
     /*
      * Code to run ONCE after the driver hits STOP
@@ -94,3 +263,5 @@ public class Monarch extends OpMode {
     public void stop() {
     }
 }
+
+
